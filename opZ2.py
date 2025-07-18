@@ -1,7 +1,7 @@
 #========================================================================
 # File:   opZ2.py 
 # Author: Benny Saxen
-# Date:   2025-07-14
+# Date:   2025-07-18
 #========================================================================
 
 import networkx as nx
@@ -11,8 +11,47 @@ import random
 import sys
 from termcolor import colored
 
+import os
+import html
 
 
+def htmlDir(directory):
+    # Kontrollera att det är en giltig katalog
+    if not os.path.isdir(directory):
+        raise NotADirectoryError(f"{directory} är inte en giltig katalog.")
+
+    # Skapa en lista med länkar till filer
+    links = []
+    for filename in os.listdir(directory):
+        filepath = os.path.join(directory, filename)
+        if os.path.isfile(filepath):
+            safe_filename = html.escape(filename)
+            # Länk öppnas i ny flik med target="_blank"
+            links.append(f'<li><a href="{safe_filename}" target="_blank">{safe_filename}</a></li>')
+
+    # Generera HTML-innehåll
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Filer i {html.escape(directory)}</title>
+    </head>
+    <body>
+        <h1>Filer i {html.escape(directory)}</h1>
+        <ul>
+            {''.join(links)}
+        </ul>
+    </body>
+    </html>
+    """
+
+    # Spara som index.html i katalogen
+    index_path = os.path.join(directory, "index.html")
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"HTML-fil skapad: {index_path}")
 
 def generate_unique_random_pairs(n_pairs, min_val, max_val, filename):
     all_possible_pairs = [
@@ -110,7 +149,7 @@ def visualize_pyvis(G, filename="graph.html", title="Interactive Graph"):
             color = 'blue'  # Only ingoing edges
             nodeType = 'B'
         elif in_deg == 0 and out_deg == 0:
-            color = 'yellow'  # Only ingoing edges
+            color = 'yellow'  # No edges
             nodeType = 'S'
         else:
             color = 'green' # Both ingoing and outgoing edges
@@ -129,20 +168,123 @@ def visualize_pyvis(G, filename="graph.html", title="Interactive Graph"):
     #print(nodeTypeDict)
     return nodeTypeDict
 
+#=======================================================================
+def generateBoxView(familie_and_members, member_status, output_file="familjer.html"):
+    html_head = """
+    <!DOCTYPE html>
+    <html lang="sv">
+    <head>
+        <meta charset="UTF-8">
+        <title>Families with members</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                padding: 20px;
+            }
+            .familj {
+                border: 2px solid #333;
+                padding: 10px;
+                margin-bottom: 20px;
+                background-color: #fff;
+                border-radius: 8px;
+            }
+            .familj-titel {
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            .medlems-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .medlem {
+                padding: 10px;
+                border-radius: 4px;
+                color: white;
+                min-width: 100px;
+                text-align: center;
+            }
+            .aktiv {
+                background-color: green;
+            }
+            .inaktiv {
+                background-color: gray;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Familjeöversikt</h1>
+    """
+
+    html_body = ""
+
+    for familj, medlemmar in familie_and_members.items():
+        html_body += f'<div class="familj">\n'
+        html_body += f'  <div class="familj-titel">{familj}</div>\n'
+        html_body += f'  <div class="medlems-container">\n'
+
+        for medlem in medlemmar:
+            status_klass = "aktiv" if member_status.get(medlem, False) else "inaktiv"
+            html_body += f'    <div class="medlem {status_klass}">{medlem}</div>\n'
+
+        html_body += f'  </div>\n</div>\n'
+
+    html_end = """
+    </body>
+    </html>
+    """
+
+    full_html = html_head + html_body + html_end
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(full_html)
+
+    print(f"HTML-fil genererad: {output_file}")
+#=======================================================================
+def logHtml(log, output_file="log.html"):
+
+    html_head = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Log</title>
+    </head>
+    <body>
+    """
+
+    html_body =  log
+
+
+    html_end = """
+    </body>
+    </html>
+    """
+    full_html = html_head + html_body + html_end
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(full_html)
+
+    print(f"HTML-fil genererad: {output_file}")
 #========================================================================
 # MAIN
 #========================================================================
 def main(args):
 
-    print(args)
+    log = ''
+
     if len(args)  == 1:
         g = args[0]
-
+        log += str(g)+'<br>'
+        # Input graph
         if g == '0':
             graphfile = 'g-random.txt'
             generate_unique_random_pairs(10, 1, 15, 'g-random.txt')
         else:
             graphfile = 'g-'+str(g)+'.txt'
+
+
         G_orig = read_graph_from_file(graphfile)
         all_edges = list(G_orig.edges)
         ntDict1 = visualize_pyvis(G_orig, "g-original.html", "Original Graph")
@@ -173,10 +315,23 @@ def main(args):
         print(":::::::::: Initial number of removed edges: " + str(removed))
         print(rList)
 
-        all_edges = list(G_work.edges)
-        print(all_edges)
-        
+        #all_edges = list(G_work.edges)
+        #print(all_edges)
+        objStatusDict = {}
+        ntDict2 = visualize_pyvis(G_mod, "g-mod.html", "Modified Graph")
+        for node in ntDict1:
+            identified = 0
+            t1 = ntDict1[node]
+            t2 = ntDict2[node]
+            #print(str(node) + ' ' +t1 + ' ' + t2)
 
+            objStatusDict[node] = True
+            if t1 == 'M' and t2 == 'F': # Member disconnected from family
+                print(colored('(M->F)Member '+str(node) + ' is dead','blue'))
+                identified = 1
+                objStatusDict[node] = False
+   
+        generateBoxView(famDict, objStatusDict)
 
         #for edge in all_edges:
         counter = 0
@@ -196,6 +351,7 @@ def main(args):
                     print(str(counter) + "============== Removed edge =====================")
                     print(tList)
                     print("selected: "+selected)
+                    log += str(fam) + ' selected:'+selected+'<br>'
                     print("=================================================")
                                 
                     #edgeList = [(10,1),(10,2)]
@@ -207,9 +363,9 @@ def main(args):
                     iteration = 0
                     while removed > 0:
                         iteration += 1
-                        #print("ITERATION: " + str(iteration))
+                        print("ITERATION: " + str(iteration))
                         G_mod,removed,rList = operation_X(G_mod)
-                        #print("Number of removed edges: " + str(removed))
+                        print("Number of removed edges: " + str(removed))
                     name = 'g-no-'+str(counter)+'.html'
                     ntDict2 = visualize_pyvis(G_mod, name, "tmp Operation X")
 
@@ -222,6 +378,7 @@ def main(args):
                         if t1 == 'M' and t2 == 'F': # Member disconnected from family
                             print(colored('(M->F)Member '+str(node) + ' is dead','blue'))
                             identified = 1
+                            log += '(M->F)Member '+str(node) + ' is dead<br>'
                         if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
                             print(colored('(M->B)Member '+str(node) + ' is selected','green'))
                             identified = 2
@@ -242,6 +399,29 @@ def main(args):
                             #print("Node type changed: "+str(t1)+'=>'+str(t2))
                             if identified == 0:
                                 print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
+
+
+    # familie_and_members = {
+    #     "Familj Svensson": ["Anna", "Bertil", "Cecilia"],
+    #     "Familj Karlsson": ["David", "Eva"],
+    #     "Familj Nilsson": ["Fredrik", "Greta", "Hugo"]
+    # }
+
+    # member_status = {
+    #     "Anna": True,
+    #     "Bertil": False,
+    #     "Cecilia": True,
+    #     "David": True,
+    #     "Eva": False,
+    #     "Fredrik": False,
+    #     "Greta": True,
+    #     "Hugo": True
+    # }
+
+    # generateBoxView(familie_and_members, member_status)
+
+    htmlDir("/home/folke/projects/AG")
+    logHtml(log,'log.html')
 #========================================================================
 # MAIN
 #========================================================================
