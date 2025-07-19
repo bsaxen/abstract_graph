@@ -1,7 +1,7 @@
 #========================================================================
 # File:   opZ2.py 
 # Author: Benny Saxen
-# Date:   2025-07-18
+# Date:   2025-07-19
 #========================================================================
 
 import networkx as nx
@@ -13,6 +13,16 @@ from termcolor import colored
 
 import os
 import html
+import glob
+
+def delete_html_files(directory):
+    html_files = glob.glob(os.path.join(directory, "*.html"))
+    for file in html_files:
+        try:
+            os.remove(file)
+            print(f"Deleted: {file}")
+        except Exception as e:
+            print(f"Error deleting {file}: {e}")
 
 
 def htmlDir(directory):
@@ -81,56 +91,73 @@ def read_graph_from_file(filename):
                 G.add_edge(u, v)
     return G
 
-
 def operation_X(G: nx.DiGraph) -> nx.DiGraph:
+
+# Leafs with outgoing edges is prioritzed
+
     G = G.copy()
     changed = True
     removed = 0
     removedList = []
 
+    #print(G)
+
     while changed:
-        #print("operation X")
         changed = False
         affected_nodes = list(G.nodes)
         #print(affected_nodes)
-        #print('----------------------')
         for node in affected_nodes:
             #print('Node='+str(node))
             in_edges = list(G.in_edges(node))
             out_edges = list(G.out_edges(node))
             total_edges = len(in_edges) + len(out_edges)
-
+            #print("IN1")
+            #print(in_edges)
+            #print("OUT1")
+            #print(out_edges)
+            
             if total_edges == 1:
                 #print('Node='+str(node))
                 if len(out_edges) == 1:
-                    #print('Out Killer ? ' + str(node))
-                    #print(out_edges)
-                    _, B = out_edges[0]
-                    #print('B node='+str(B))
-                    outgoing_from_B = list(G.out_edges(B))
-                    if outgoing_from_B:
-                        #print('Yes========== Remove outgoing from B:')
-                        #print(outgoing_from_B)
-                        G.remove_edges_from(outgoing_from_B)
+                    _, X = out_edges[0]
+                    outgoing_from_X = list(G.out_edges(X))
+                    if outgoing_from_X:
+                        #print('Yes========== Remove outgoing:')
+                        #print(outgoing_from_X)
+                        G.remove_edges_from(outgoing_from_X)
                         changed = True
                         removed += 1
-                        removedList.append(outgoing_from_B)
-                        
-                elif len(in_edges) == 1:
-                    #print('In Killer ? ' + str(node))
-                    #print(in_edges)
-                    B, _ = in_edges[0]
-                    #print('B node='+str(B))
-                    incoming_to_B = list(G.in_edges(B))
-                    if incoming_to_B:
-                        #print('Yes ========= Remove incoming to B:')
-                        #print(incoming_to_B)
-                        G.remove_edges_from(incoming_to_B)
-                        changed = True
-                        removed += 1
-                        removedList.append(incoming_to_B)
-                        
+                        removedList.append(outgoing_from_X)
 
+    #print(G)
+    changed = True
+    while changed:
+        changed = False
+        affected_nodes = list(G.nodes)
+        #print(affected_nodes)
+        for node in affected_nodes:
+            #print('Node='+str(node))
+            in_edges = list(G.in_edges(node))
+            out_edges = list(G.out_edges(node))
+            total_edges = len(in_edges) + len(out_edges)
+            #print("IN2")
+            #print(in_edges)
+            #print("OUT2")
+            #print(out_edges)
+
+            if total_edges == 1:
+                #print('Node='+str(node))
+                if len(in_edges) == 1:
+                    X,_ = in_edges[0]
+                    incoming_to_X = list(G.in_edges(X))
+                    if incoming_to_X:
+                        #print('Yes========== Remove ingoing:')
+                        #print(incoming_to_X)
+                        G.remove_edges_from(incoming_to_X)
+                        changed = True
+                        removed += 1
+                        removedList.append(incoming_to_X)
+                     
     return G,removed,removedList
 
 #========================================================================
@@ -273,10 +300,10 @@ def logHtml(log, output_file="log.html"):
 def main(args):
 
     log = ''
-
+    delete_html_files("./")
     if len(args)  == 1:
         g = args[0]
-        log += str(g)+'<br>'
+        log +='Mode: '+ str(g)+'<br>'
         # Input graph
         if g == '0':
             graphfile = 'g-random.txt'
@@ -313,6 +340,13 @@ def main(args):
         G_work = deepcopy(G_orig)
         G_mod,removed,rList = operation_X(G_work)
         print(":::::::::: Initial number of removed edges: " + str(removed))
+
+        s = str(rList)
+        log += 'FWL:'+s+'<br>'
+        # for edg in rList: 
+        #     edg = str(edg)
+        #     print(edg)
+        #     log += edg
         print(rList)
 
         #all_edges = list(G_work.edges)
@@ -351,23 +385,23 @@ def main(args):
                     print(str(counter) + "============== Removed edge =====================")
                     print(tList)
                     print("selected: "+selected)
-                    log += str(fam) + ' selected:'+selected+'<br>'
+                    log += '======== Family '+str(fam) + ' selected:'+selected+'<br>'
                     print("=================================================")
                                 
                     #edgeList = [(10,1),(10,2)]
-                    G_tmp = deepcopy(G_orig)
+                    G_tmp = deepcopy(G_mod)
                     G_tmp.remove_edges_from(tList)
 
-                    G_mod,removed,rList = operation_X(G_tmp)
+                    G_work,removed,rList = operation_X(G_tmp)
                     #print(":::::::::: Initial number of removed edges: " + str(removed))
                     iteration = 0
                     while removed > 0:
                         iteration += 1
                         print("ITERATION: " + str(iteration))
-                        G_mod,removed,rList = operation_X(G_mod)
+                        G_work,removed,rList = operation_X(G_work)
                         print("Number of removed edges: " + str(removed))
                     name = 'g-no-'+str(counter)+'.html'
-                    ntDict2 = visualize_pyvis(G_mod, name, "tmp Operation X")
+                    ntDict2 = visualize_pyvis(G_work, name, "tmp Operation X")
 
                     for node in ntDict1:
                         identified = 0
@@ -376,52 +410,38 @@ def main(args):
                         #print(str(node) + ' ' +t1 + ' ' + t2)
 
                         if t1 == 'M' and t2 == 'F': # Member disconnected from family
-                            print(colored('(M->F)Member '+str(node) + ' is dead','blue'))
+                            print(colored('(M->F) Member '+str(node) + ' is dead','blue'))
                             identified = 1
-                            log += '(M->F)Member '+str(node) + ' is dead<br>'
+                            log += '(M->F) Member '+str(node) + ' is dead<br>'
                         if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
                             print(colored('(M->B)Member '+str(node) + ' is selected','green'))
                             identified = 2
-
+                            log += '(M->B) Member '+str(node) + ' is selected<br>'
                         if t1 == 'M' and t2 == 'S':
                             print(colored('(S) Member '+str(node),'yellow') + ' is single *************')
                             identified = 3
+                            log += '(S) Member '+str(node) + ' is single<br>'
 
                         if t1 == 'B' and t2 == 'S':
                             print(colored('(S) Block '+str(node),'yellow') + ' is single *************')
                             identified = 3
+                            log += '(S) Block '+str(node) + ' is single<br>'
 
                         if t1 == 'F' and t2 == 'S': # Empty family
-                            print(colored('(F->S)Family '+str(node) + ' is empty','red'))
+                            print(colored('(F->S) Family '+str(node) + ' is empty','red'))
                             identified = 4
+                            log += '(F->S) Family '+str(node) + ' is empty<br>'
 
                         if t1 != t2:
                             #print("Node type changed: "+str(t1)+'=>'+str(t2))
                             if identified == 0:
+                                log += 'ERROR<br>'
                                 print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
 
 
-    # familie_and_members = {
-    #     "Familj Svensson": ["Anna", "Bertil", "Cecilia"],
-    #     "Familj Karlsson": ["David", "Eva"],
-    #     "Familj Nilsson": ["Fredrik", "Greta", "Hugo"]
-    # }
-
-    # member_status = {
-    #     "Anna": True,
-    #     "Bertil": False,
-    #     "Cecilia": True,
-    #     "David": True,
-    #     "Eva": False,
-    #     "Fredrik": False,
-    #     "Greta": True,
-    #     "Hugo": True
-    # }
-
-    # generateBoxView(familie_and_members, member_status)
-
-    htmlDir("/home/folke/projects/AG")
+   
     logHtml(log,'log.html')
+    htmlDir("./")
 #========================================================================
 # MAIN
 #========================================================================
@@ -430,4 +450,3 @@ if __name__ == "__main__":
 #========================================================================
 # END of File
 #========================================================================
-
