@@ -1,7 +1,7 @@
 #========================================================================
 # File:   opZ2.py 
 # Author: Benny Saxen
-# Date:   2025-07-19
+# Date:   2025-07-22
 #========================================================================
 
 import networkx as nx
@@ -295,9 +295,74 @@ def logHtml(log, output_file="log.html"):
 
     print(f"HTML-fil genererad: {output_file}")
 #========================================================================
+def drawSymmetryMatrix(sDict):
+    for key,oList in sDict.items():
+        print(key,end='')
+        for obj in oList:
+            print(obj,end='')
+        print(obj)
+      
+#========================================================================
+
+def dict_to_colored_symmetric_html_matrix(data: dict, filename='matrix.html'):
+    # Steg 1: Hämta alla unika noder
+    nodes = sorted(set(data.keys()) | {v for values in data.values() for v in values})
+    index = {node: i for i, node in enumerate(nodes)}
+    size = len(nodes)
+
+    # Steg 2: Skapa och fyll en matris
+    matrix = [[0] * size for _ in range(size)]
+    for key, neighbors in data.items():
+        for neighbor in neighbors:
+            i, j = index[key], index[neighbor]
+            matrix[i][j] = 1  # Enkelsidig riktning (kan bli asymmetrisk)
+
+    # Steg 3: Skapa HTML med färger
+    html = '''
+    <html><head><style>
+    table, td, th { border: 1px solid black; border-collapse: collapse; padding: 5px; text-align: center; }
+    th { background-color: #f2f2f2; }
+    .connected { background-color: #c8e6c9; }     /* grönt */
+    .diagonal { background-color: #bbdefb; }      /* blått */
+    .asymmetric { background-color: #ffcdd2; }    /* rött */
+    </style></head><body>
+    <h2>Symmetrisk Matris (med färgkodning)</h2>
+    <table>
+    '''
+
+    # Rubriker
+    html += '<tr><th></th>' + ''.join(f'<th>{node}</th>' for node in nodes) + '</tr>'
+
+    # Rader
+    for i in range(size):
+        html += f'<tr><th>{nodes[i]}</th>'
+        for j in range(size):
+            value = matrix[i][j]
+            cls = ""
+            if i == j:
+                cls = "diagonal"
+            elif value == 1 and matrix[j][i] == 1:
+                cls = "connected"
+            elif value != matrix[j][i]:
+                cls = "asymmetric"
+            html += f'<td class="{cls}">{value}</td>'
+        html += '</tr>'
+    
+    html += '</table></body></html>'
+
+    # Steg 4: Spara filen
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(f"Färgad HTML-matris sparad som {filename}")
+
+
+#========================================================================
 # MAIN
 #========================================================================
 def main(args):
+
+    symmetryDict = {}
 
     log = ''
     delete_html_files("./")
@@ -382,9 +447,10 @@ def main(args):
 
                 if len(tList) > 0:
                     counter += 1
-                    print(str(counter) + "============== Removed edge =====================")
-                    print(tList)
-                    print("selected: "+selected)
+                    print(str(counter) + "============== WHAT IF =====================")
+                    #print(tList)
+                    symmetryDict[mem1] = []
+                    print("selected A-B edge: "+selected)
                     log += '======== Family '+str(fam) + ' selected:'+selected+'<br>'
                     print("=================================================")
                                 
@@ -404,44 +470,51 @@ def main(args):
                     ntDict2 = visualize_pyvis(G_work, name, "tmp Operation X")
 
                     for node in ntDict1:
-                        identified = 0
-                        t1 = ntDict1[node]
-                        t2 = ntDict2[node]
-                        #print(str(node) + ' ' +t1 + ' ' + t2)
+                        if node not in famDict[fam]:
+                            identified = 0
+                            t1 = ntDict1[node]
+                            t2 = ntDict2[node]
+                            #print(str(node) + ' ' +t1 + ' ' + t2)
 
-                        if t1 == 'M' and t2 == 'F': # Member disconnected from family
-                            print(colored('(M->F) Member '+str(node) + ' is dead','blue'))
-                            identified = 1
-                            log += '(M->F) Member '+str(node) + ' is dead<br>'
-                        if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
-                            print(colored('(M->B)Member '+str(node) + ' is selected','green'))
-                            identified = 2
-                            log += '(M->B) Member '+str(node) + ' is selected<br>'
-                        if t1 == 'M' and t2 == 'S':
-                            print(colored('(S) Member '+str(node),'yellow') + ' is single *************')
-                            identified = 3
-                            log += '(S) Member '+str(node) + ' is single<br>'
+                            if t1 == 'M' and t2 == 'F': # Member disconnected from family
+                                print(colored('(M->F) Member '+str(node) + ' is dead','blue'))
+                                identified = 1
+                                log += '(M->F) Member '+str(node) + ' is dead<br>'
+                                symmetryDict[mem1].append(node)
+                            if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
+                                print(colored('(M->B)Member '+str(node) + ' is selected','green'))
+                                identified = 2
+                                log += '(M->B) Member '+str(node) + ' is selected<br>'
+                            if t1 == 'M' and t2 == 'S':
+                                print(colored('(S) Member '+str(node),'yellow') + ' is single *************')
+                                identified = 3
+                                log += '(S) Member '+str(node) + ' is single<br>'
 
-                        if t1 == 'B' and t2 == 'S':
-                            print(colored('(S) Block '+str(node),'yellow') + ' is single *************')
-                            identified = 3
-                            log += '(S) Block '+str(node) + ' is single<br>'
+                            if t1 == 'B' and t2 == 'S':
+                                print(colored('(S) Block '+str(node),'yellow') + ' is single *************')
+                                identified = 3
+                                log += '(S) Block '+str(node) + ' is single<br>'
 
-                        if t1 == 'F' and t2 == 'S': # Empty family
-                            print(colored('(F->S) Family '+str(node) + ' is empty','red'))
-                            identified = 4
-                            log += '(F->S) Family '+str(node) + ' is empty<br>'
+                            if t1 == 'F' and t2 == 'S': # Empty family
+                                print(colored('(F->S) Family '+str(node) + ' is empty','red'))
+                                identified = 4
+                                log += '(F->S) Family '+str(node) + ' is empty<br>'
 
-                        if t1 != t2:
-                            #print("Node type changed: "+str(t1)+'=>'+str(t2))
-                            if identified == 0:
-                                log += 'ERROR<br>'
-                                print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
+                            if t1 != t2:
+                                #print("Node type changed: "+str(t1)+'=>'+str(t2))
+                                if identified == 0:
+                                    log += 'ERROR<br>'
+                                    print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
 
 
-   
+    dict_to_colored_symmetric_html_matrix(symmetryDict)
     logHtml(log,'log.html')
     htmlDir("./")
+
+    print(symmetryDict)
+
+    #drawSymmetryMatrix(symmetryDict)
+   
 #========================================================================
 # MAIN
 #========================================================================
