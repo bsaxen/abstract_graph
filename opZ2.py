@@ -1,7 +1,7 @@
 #========================================================================
 # File:   opZ2.py 
 # Author: Benny Saxen
-# Date:   2025-07-22
+# Date:   2025-08-05
 #========================================================================
 
 import networkx as nx
@@ -14,6 +14,8 @@ from termcolor import colored
 import os
 import html
 import glob
+
+log = '=== LOG ===\n'
 
 def delete_html_files(directory):
     html_files = glob.glob(os.path.join(directory, "*.html"))
@@ -80,21 +82,41 @@ def generate_unique_random_pairs(n_pairs, min_val, max_val, filename):
         f.close()
 
 def read_graph_from_file(filename):
+    global log
+
     G = nx.DiGraph()
+    inLimit = {}
+    outLimit = {}
+    #showList = [1,2,3,4,66,67,68,69,112,115,117]
+    edgeCounter = 0
     with open(filename, 'r') as f:
+        log += 'Original graph Triples:<br>'
         for line in f:
             #print(line)
             if '#' not in line:
                 u, v = map(int, line.strip().split())
+                log += str(u)+','+str(v)+'<br>'
                 #print(u)
                 #print(v)
+                # if u not in outLimit:
+                #     outLimit[u] = 0
+                # if v not in inLimit:
+                #     inLimit[v] = 0
+                # outLimit[u] += 1
+                # inLimit[v] += 1
+                #if inLimit[v] < 2 and outLimit[u] < 2:
+                #if int(u) > 0 and int(u) < 100:
+                #if int(u) in showList:
                 G.add_edge(u, v)
+                edgeCounter += 1
+    print("Edges in graph: "+str(edgeCounter))
+    log += 'Edges in graph: '+str(edgeCounter)+'<br>'
     return G
-
+#========================================================================
 def operation_X(G: nx.DiGraph) -> nx.DiGraph:
-
+#========================================================================
 # Leafs with outgoing edges is prioritzed
-
+    global log
     G = G.copy()
     changed = True
     removed = 0
@@ -128,6 +150,7 @@ def operation_X(G: nx.DiGraph) -> nx.DiGraph:
                         changed = True
                         removed += 1
                         removedList.append(outgoing_from_X)
+                        log += str(outgoing_from_X) + ' removed outgoing<br>'
 
     #print(G)
     changed = True
@@ -157,11 +180,14 @@ def operation_X(G: nx.DiGraph) -> nx.DiGraph:
                         changed = True
                         removed += 1
                         removedList.append(incoming_to_X)
+                        log += str(incoming_to_X) + ' removed incoming<br>'
                      
     return G,removed,removedList
 
 #========================================================================
 def visualize_pyvis(G, filename="graph.html", title="Interactive Graph"):
+#========================================================================
+    global log
     net = Network(directed=True, notebook=False)
     nodeTypeDict = {}
     # Add nodes with color based on edge directionality
@@ -184,6 +210,7 @@ def visualize_pyvis(G, filename="graph.html", title="Interactive Graph"):
 
         net.add_node(node, label=str(node), color=color)
         nodeTypeDict[node] = nodeType
+        log += 'node: '+str(node) + ' ' + nodeType + '<br>'
     
     # Add edges
     for source, target in G.edges():
@@ -303,8 +330,8 @@ def drawSymmetryMatrix(sDict):
         print(obj)
       
 #========================================================================
-
 def dict_to_colored_symmetric_html_matrix(data: dict, filename='matrix.html'):
+#========================================================================
     # Steg 1: Hämta alla unika noder
     nodes = sorted(set(data.keys()) | {v for values in data.values() for v in values})
     index = {node: i for i, node in enumerate(nodes)}
@@ -326,7 +353,7 @@ def dict_to_colored_symmetric_html_matrix(data: dict, filename='matrix.html'):
     .diagonal { background-color: #bbdefb; }      /* blått */
     .asymmetric { background-color: #ffcdd2; }    /* rött */
     </style></head><body>
-    <h2>Symmetrisk Matris (med färgkodning)</h2>
+    <h2>Symmetry Matrix </h2>
     <table>
     '''
 
@@ -354,17 +381,165 @@ def dict_to_colored_symmetric_html_matrix(data: dict, filename='matrix.html'):
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"Färgad HTML-matris sparad som {filename}")
+    print(f"Matrix saved as {filename}")
 
+#========================================================================
+def INIT(G,label):
+#========================================================================
+    all_edges = list(G.edges)
+    ntDict = visualize_pyvis(G, "g-"+label+".html", label)
+    famDict = {}
+    for edge in all_edges:
+        nodeA = edge[0]
+        nodeB = edge[1]
+        tA = ntDict[nodeA]
+        tB = ntDict[nodeB]
+        #print(str(nodeA) + '(A) ' +tA)
+        #print(str(nodeB) + '(B) ' +tB)
+        #print()
+        if tA == 'F':
+            if nodeA not in famDict:
+                famDict[nodeA] = []
+            famDict[nodeA].append(nodeB)
+
+        if tA == 'F' and tB == 'B':
+            print('Member '+str(nodeB) + ' is unused')
+        if tA == 'S' or tB == 'S':
+            print('Node '+str(nodeB) + ' is single *******')
+        if nodeA == nodeB:
+            print('Edge '+str(nodeA) + ' is a self-reference *******')
+
+    return all_edges,ntDict,famDict
+#========================================================================
+def FWL(G):
+#========================================================================
+    global log
+    log += 'FWL<br>'
+    G_work = deepcopy(G)
+    G_mod,removed,rList = operation_X(G_work)
+
+    if removed == 0:
+        print("Nothing removed in FWL")
+        log += "Nothing removed in FWL<br>"
+    else:
+        print("removed edges due to FWL")
+        print(rList)
+        log += str(rList)+'<br>'
+
+
+    return G_mod, removed, rList
+
+#========================================================================
+def BWL(G):
+#========================================================================
+    global log
+    symmetryDict = {}
+    list_of_edges_to_be_removed = []
+
+    all_edges1,ntDict1,famDict1 = INIT(G,'BWL')
+    counter = 0
+    for fam in famDict1:
+        print('------------------------------ family:' + str(fam))
+        for mem1 in famDict1[fam]:
+            tList  = []
+            selected = str(fam)+'->'+str(mem1)
+            for mem2 in famDict1[fam]:
+                if mem1 != mem2:  
+                    edge = (fam,mem2)
+                    tList.append(edge)
+
+            if len(tList) > 0:
+                counter += 1
+                print(str(counter) + "============== WHAT IF: "+str(selected)+" =====================")
+                print(tList)
+                symmetryDict[mem1] = []
+                print("selected A-B edge: "+selected)
+                log += '======== WHAT IF Family '+str(fam) + ' selected:'+str(mem1)+'<br>'
+                print("=================================================")
+                            
+                #edgeList = [(10,1),(10,2)]
+                G_tmp = deepcopy(G)
+                #assert all(isinstance(e, tuple) and len(e) == 2 for e in tList), f"tList contains invalid edges: {tList}"
+
+                G_tmp.remove_edges_from(tList)
+                log += "ITERATION: 0"
+                G_work, removed, rList = FWL(G_tmp)
+
+                #G_work,removed,rList = operation_X(G_tmp)
+                print(":::::::::: Initial number of removed edges: " + str(removed))
+                iteration = 0
+                while removed > 0:
+                    iteration += 1
+                    print("ITERATION: " + str(iteration))
+                    log += "ITERATION: " + str(iteration)
+                    #G_work,removed,rList = operation_X(G_work)
+                    G_work, removed, rList = FWL(G_work)
+                    #print("Number of removed edges: " + str(removed))
+
+                label = 'node-'+str(mem2)+'-iteration-'+str(counter)
+                all_edges2,ntDict2,famDict2 = INIT(G_work,label)
+
+                # Analize changes
+                
+                for node in ntDict1:
+                    if node not in famDict1[fam]:
+                        identified = 0
+                        t1 = ntDict1[node]
+                        t2 = ntDict2[node]
+                        log += str(node) + ' ' +t1 + ' ' + t2 + '<br>'
+
+                        if t1 == 'M' and t2 == 'F': # Member disconnected from family
+                            print(colored('(M->F) Member '+str(node) + ' is dead','blue'))
+                            identified = 1
+                            log += '(M->F) Member '+str(node) + ' is dead<br>'
+                            symmetryDict[mem1].append(node)
+                        if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
+                            print(colored('(M->B)Member '+str(node) + ' is selected','green'))
+                            identified = 2
+                            log += '(M->B) Member '+str(node) + ' is selected<br>'
+                        if t1 == 'M' and t2 == 'S':
+                            print(colored('(S) Member '+str(node),'yellow') + ' is single *************')
+                            identified = 3
+                            log += '(S) Member '+str(node) + ' is single<br>'
+
+                        if t1 == 'B' and t2 == 'S':
+                            print(colored('(S) Block '+str(node),'yellow') + ' is single *************')
+                            identified = 3
+                            log += '(S) Block '+str(node) + ' is single<br>'
+
+                        if t1 == 'F' and t2 == 'S': # Empty family
+                            print(colored('(F->S) Family '+str(node) + ' is empty','red'))
+                            identified = 4
+                            log += '<p style=\"background-color:red\">(F->S) Family '+str(node) + ' is empty</p>'
+                            # remove edge with mem1 and fam
+                            list_of_edges_to_be_removed.append((fam,mem1))
+                            
+                            #G_work.remove_edges_from([edge])
+
+                        if t1 != t2:
+                            #print("Node type changed: "+str(t1)+'=>'+str(t2))
+                            if identified == 0:
+                                log += 'ERROR<br>'
+                                print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
+
+    if len(list_of_edges_to_be_removed) > 0:
+        log += '+++++++ System exclusions: ' + str(list_of_edges_to_be_removed) + '<br>'
+        G.remove_edges_from(list_of_edges_to_be_removed)
+        G,symmetryDict = BWL(G)
+    else:
+        log += '+++++++ No system exclusions<br>'
+
+    INIT(G,'final_BWL')   
+    return G,symmetryDict
 
 #========================================================================
 # MAIN
 #========================================================================
 def main(args):
+    global log
 
-    symmetryDict = {}
+    
 
-    log = ''
     delete_html_files("./")
     if len(args)  == 1:
         g = args[0]
@@ -372,34 +547,27 @@ def main(args):
         # Input graph
         if g == '0':
             graphfile = 'g-random.txt'
-            generate_unique_random_pairs(10, 1, 15, 'g-random.txt')
+            generate_unique_random_pairs(100, 1, 99, 'g-random.txt')
         else:
             graphfile = 'g-'+str(g)+'.txt'
 
 
         G_orig = read_graph_from_file(graphfile)
-        all_edges = list(G_orig.edges)
-        ntDict1 = visualize_pyvis(G_orig, "g-original.html", "Original Graph")
-        famDict = {}
-        for edge in all_edges:
-            nodeA = edge[0]
-            nodeB = edge[1]
-            tA = ntDict1[nodeA]
-            tB = ntDict1[nodeB]
-            #print(str(nodeA) + '(A) ' +tA)
-            #print(str(nodeB) + '(B) ' +tB)
-            #print()
-            if tA == 'F':
-                if nodeA not in famDict:
-                    famDict[nodeA] = []
-                famDict[nodeA].append(nodeB)
+        all_edges,ntDict1,famDict = INIT(G_orig,'original')
 
-            if tA == 'F' and tB == 'B':
-                print('Member '+str(nodeB) + ' is unused')
-            if tA == 'S' or tB == 'S':
-                print('Node '+str(nodeB) + ' is single *******')
-            if nodeA == nodeB:
-                print('Edge '+str(nodeA) + ' is a self-reference *******')
+        G_fwl, removed, rList = FWL(G_orig)
+
+        G_final,symmetryDict = BWL(G_fwl)
+
+        print(symmetryDict)
+        dict_to_colored_symmetric_html_matrix(symmetryDict)
+        logHtml(log,'log.html')
+        htmlDir("./")
+
+        exit()
+
+
+
 
 
         G_work = deepcopy(G_orig)
@@ -407,7 +575,7 @@ def main(args):
         print(":::::::::: Initial number of removed edges: " + str(removed))
 
         s = str(rList)
-        log += 'FWL:'+s+'<br>'
+        log += 'FWL-removed edges:'+s+'<br>'
         # for edg in rList: 
         #     edg = str(edg)
         #     print(edg)
@@ -432,86 +600,15 @@ def main(args):
    
         generateBoxView(famDict, objStatusDict)
 
+        #exit()
+
         #for edge in all_edges:
-        counter = 0
-        for fam in famDict:
-        
-            print('------------------------------ family:' + str(fam))
-            for mem1 in famDict[fam]:
-                tList  = []
-                selected = str(fam)+'->'+str(mem1)
-                for mem2 in famDict[fam]:
-                    if mem1 != mem2:  
-                        edge = (fam,mem2)
-                        tList.append(edge)
-
-                if len(tList) > 0:
-                    counter += 1
-                    print(str(counter) + "============== WHAT IF =====================")
-                    #print(tList)
-                    symmetryDict[mem1] = []
-                    print("selected A-B edge: "+selected)
-                    log += '======== Family '+str(fam) + ' selected:'+selected+'<br>'
-                    print("=================================================")
-                                
-                    #edgeList = [(10,1),(10,2)]
-                    G_tmp = deepcopy(G_mod)
-                    G_tmp.remove_edges_from(tList)
-
-                    G_work,removed,rList = operation_X(G_tmp)
-                    #print(":::::::::: Initial number of removed edges: " + str(removed))
-                    iteration = 0
-                    while removed > 0:
-                        iteration += 1
-                        print("ITERATION: " + str(iteration))
-                        G_work,removed,rList = operation_X(G_work)
-                        print("Number of removed edges: " + str(removed))
-                    name = 'g-no-'+str(counter)+'.html'
-                    ntDict2 = visualize_pyvis(G_work, name, "tmp Operation X")
-
-                    for node in ntDict1:
-                        if node not in famDict[fam]:
-                            identified = 0
-                            t1 = ntDict1[node]
-                            t2 = ntDict2[node]
-                            #print(str(node) + ' ' +t1 + ' ' + t2)
-
-                            if t1 == 'M' and t2 == 'F': # Member disconnected from family
-                                print(colored('(M->F) Member '+str(node) + ' is dead','blue'))
-                                identified = 1
-                                log += '(M->F) Member '+str(node) + ' is dead<br>'
-                                symmetryDict[mem1].append(node)
-                            if t1 == 'M' and t2 == 'B': # Member disconnected from all blockings
-                                print(colored('(M->B)Member '+str(node) + ' is selected','green'))
-                                identified = 2
-                                log += '(M->B) Member '+str(node) + ' is selected<br>'
-                            if t1 == 'M' and t2 == 'S':
-                                print(colored('(S) Member '+str(node),'yellow') + ' is single *************')
-                                identified = 3
-                                log += '(S) Member '+str(node) + ' is single<br>'
-
-                            if t1 == 'B' and t2 == 'S':
-                                print(colored('(S) Block '+str(node),'yellow') + ' is single *************')
-                                identified = 3
-                                log += '(S) Block '+str(node) + ' is single<br>'
-
-                            if t1 == 'F' and t2 == 'S': # Empty family
-                                print(colored('(F->S) Family '+str(node) + ' is empty','red'))
-                                identified = 4
-                                log += '(F->S) Family '+str(node) + ' is empty<br>'
-
-                            if t1 != t2:
-                                #print("Node type changed: "+str(t1)+'=>'+str(t2))
-                                if identified == 0:
-                                    log += 'ERROR<br>'
-                                    print(colored("++++++++++++++++ ERROR",'red')+": unidentified node type transition")
 
 
-    dict_to_colored_symmetric_html_matrix(symmetryDict)
-    logHtml(log,'log.html')
-    htmlDir("./")
 
-    print(symmetryDict)
+
+
+    #print(symmetryDict)
 
     #drawSymmetryMatrix(symmetryDict)
    
