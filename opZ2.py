@@ -553,25 +553,20 @@ def main(args):
 
 
         G_orig = read_graph_from_file(graphfile)
-        all_edges,ntDict1,famDict = INIT(G_orig,'original')
-
+        all_edges,ntDict1,famDict1 = INIT(G_orig,'original')
+    
         G_fwl, removed, rList = FWL(G_orig)
+
+        #all_edges,ntDict2,famDic2 = INIT(G_orig,'original')
 
         G_final,symmetryDict = BWL(G_fwl)
 
         print(symmetryDict)
         dict_to_colored_symmetric_html_matrix(symmetryDict)
-        logHtml(log,'log.html')
-        htmlDir("./")
-
-        exit()
 
 
+        #exit()
 
-
-
-        G_work = deepcopy(G_orig)
-        G_mod,removed,rList = operation_X(G_work)
         print(":::::::::: Initial number of removed edges: " + str(removed))
 
         s = str(rList)
@@ -585,32 +580,26 @@ def main(args):
         #all_edges = list(G_work.edges)
         #print(all_edges)
         objStatusDict = {}
-        ntDict2 = visualize_pyvis(G_mod, "g-mod.html", "Modified Graph")
+        ntDict2 = visualize_pyvis(G_final, "g-final.html", "Final Graph")
+
         for node in ntDict1:
             identified = 0
             t1 = ntDict1[node]
             t2 = ntDict2[node]
-            #print(str(node) + ' ' +t1 + ' ' + t2)
+            print(str(node) + ' ' +t1 + ' ' + t2)
 
             objStatusDict[node] = True
             if t1 == 'M' and t2 == 'F': # Member disconnected from family
                 print(colored('(M->F)Member '+str(node) + ' is dead','blue'))
+                log += '<p style=\"background-color:yellow\">(M->F) Member '+str(node) + ' is dead</p>'
                 identified = 1
                 objStatusDict[node] = False
    
-        generateBoxView(famDict, objStatusDict)
-
-        #exit()
-
-        #for edge in all_edges:
+        generateBoxView(famDict1, objStatusDict)
 
 
-
-
-
-    #print(symmetryDict)
-
-    #drawSymmetryMatrix(symmetryDict)
+        logHtml(log,'log.html')
+        htmlDir("./")
    
 #========================================================================
 # MAIN
